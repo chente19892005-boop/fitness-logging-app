@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<!--
+  Stronger — 健身参数记录 App
+  Copyright (c) 2026 田英可 (Tian Yingke). All rights reserved.
+
+  作者 / Author  : 田英可 (Tian Yingke)
+  联系 / Contact : +86 173 3218 2657
+
+  本软件为作者原创作品，未经许可不得用于商业用途或二次分发。
+  Original work by the author. Unauthorized commercial use or
+  redistribution is not permitted.
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#f3f6fc">
+<meta name="format-detection" content="telephone=no">
+<title>Stronger</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ================= 顶部：周历 ================= -->
+  <header class="topbar">
+    <div class="week-nav">
+      <div class="range" id="weekRange"></div>
+      <div class="nav-btns">
+        <button class="nav-btn" id="btnPrev" aria-label="上一周">‹</button>
+        <button class="nav-btn" id="btnNext" aria-label="下一周">›</button>
+        <button class="nav-btn" id="btnMonth" aria-label="查看整月日历">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3.4" y="5.2" width="17.2" height="15.4" rx="3.2"/>
+            <path d="M8 3.1v3.6M16 3.1v3.6M3.4 10.2h17.2"/>
+            <circle cx="8.6" cy="14" r="1" fill="currentColor" stroke="none"/>
+            <circle cx="12" cy="14" r="1" fill="currentColor" stroke="none"/>
+            <circle cx="15.4" cy="14" r="1" fill="currentColor" stroke="none"/>
+            <circle cx="8.6" cy="17.4" r="1" fill="currentColor" stroke="none"/>
+            <circle cx="12" cy="17.4" r="1" fill="currentColor" stroke="none"/>
+          </svg>
+        </button>
+        <button class="nav-btn" id="btnSettings" aria-label="设置">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6 1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.6.71 1.03 1.51 1.03H21a2 2 0 1 1 0 4h-.09c-.8 0-1.37.43-1.51 1z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="week-strip" id="weekStrip"></div>
+  </header>
+
+  <!-- ================= 中间：当天内容 ================= -->
+  <main class="content" id="content">
+    <div class="day-head">
+      <div class="t" id="dayTitle"></div>
+      <!-- 换部位：紧跟在标题后面，一个「换」字，不加箭头 -->
+      <button class="chip-btn" id="btnChangePart">换</button>
+      <div class="dh-right">
+        <span class="s" id="daySub"></span>
+        <!-- 改动范围的开关：灭（默认）= 换的部位以后每个同一天都用，亮 = 只改今天。
+             文案和选中态由 renderScope() 维护，节点本身不重建。 -->
+        <button class="scope-btn" id="btnScope" data-act="scope" aria-pressed="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3.2" y="4.4" width="17.6" height="16.2" rx="4"/>
+            <path d="M3.2 9.4h17.6"/>
+            <circle cx="12" cy="14.8" r="2.3" fill="currentColor" stroke="none"/>
+          </svg>
+          <span class="sb-txt">每个周六</span>
+        </button>
+      </div>
+    </div>
+    <div id="contentInner"></div>
+  </main>
+
+  <!-- ================= 底部操作栏 ================= -->
+  <div class="bottom-bar" id="saveBar">
+    <button class="btn-save" id="btnSave">保存今天的记录</button>
+  </div>
+
+  <!-- ================= 底部弹层 ================= -->
+  <div class="mask" id="mask"></div>
+  <div class="sheet" id="sheet">
+    <!-- 吸顶栏：面板整体滚动时它黏在上沿，内容从磨砂层底下滚过去 -->
+    <div class="sheet-top">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head">
+        <div class="st" id="sheetTitle">动作库</div>
+        <button class="sheet-close" id="sheetClose" aria-label="关闭">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:15px;height:15px"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="sheet-body" id="sheetBody"></div>
+  </div>
+
+  <!-- ================= 二级弹层 =================
+       叠在主弹层上面（设置 → 点某天改部位 / 导出导入数据）。
+       主弹层不清空、不重画，只是往后退半步 —— 所以关掉这层会回到主弹层，
+       而不是连它一起消失。 -->
+  <div class="mask mask-sub" id="mask2"></div>
+  <div class="sheet sheet-sub" id="sheet2">
+    <div class="sheet-top">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head">
+        <div class="st" id="sheet2Title"></div>
+        <button class="sheet-close" id="sheet2Close" aria-label="关闭">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:15px;height:15px"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="sheet-body" id="sheet2Body"></div>
+  </div>
+
+  <!-- ================= 应用内对话框 =================
+       替代 window.prompt / window.confirm。那两个是安卓系统原生弹窗，
+       方角 + 系统配色，和 App 的圆角浅蓝风格不是一套，所以自己画一个。 -->
+  <div class="dlg-wrap" id="dlgWrap">
+    <div class="dlg" id="dlg" role="dialog" aria-modal="true"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

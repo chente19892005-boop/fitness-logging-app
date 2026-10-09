@@ -1,0 +1,751 @@
+/* ===========================================================
+   Stronger — 健身参数记录 App
+   Copyright (c) 2026 田英可 (Tian Yingke). All rights reserved.
+
+   作者 / Author  : 田英可 (Tian Yingke)
+   联系 / Contact : +86 173 3218 2657
+
+   本软件为作者原创作品，未经许可不得用于商业用途或二次分发。
+   Original work by the author. Unauthorized commercial use or
+   redistribution is not permitted.
+   =========================================================== */
+
+/* ===========================================================
+   Stronger — 样式
+   浅色主题：白底 + 蓝主色，通透明亮
+   适配真我 GT6：6.78" 屏，约 412×915 CSS px，居中挖孔 + 手势条
+   =========================================================== */
+
+:root{
+  --bg:        #f3f6fc;   /* 页面底 */
+  --card:      #ffffff;   /* 卡片 */
+  --soft:      #f7f8fc;   /* 输入格 / 次级底 */
+  --soft-blue: #eef3ff;   /* 浅蓝容器：图标方块、训练日卡片 */
+  --tint-blue: #f1f5ff;   /* 上次参数条 */
+
+  --line:      #e9ebf4;
+  --line-2:    #dde3f0;
+  --line-blue: #c9dbff;
+
+  --ink:       #232838;
+  --ink-2:     #3d4557;
+  --muted:     #6b7280;
+  --faint:     #9aa3b2;
+
+  --accent:    #2e6fed;   /* 主色：蓝 */
+  --accent-d:  #1f57c9;
+  --accent-s:  #90b0f0;   /* 次级按钮（沿用） */
+  --green:     #16a34a;
+  --danger:    #e5484d;
+
+  --r-lg: 18px;
+  --r-md: 13px;
+  --r-sm: 10px;
+
+  --shadow:      0 1px 2px rgba(35,40,56,.04), 0 6px 16px rgba(35,40,56,.055);
+  --shadow-blue: 0 6px 18px rgba(46,111,237,.3);
+
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+
+*{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+html,body{
+  margin:0; padding:0; height:100%;
+  background:var(--bg); color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  font-size:15px; line-height:1.5;
+  overscroll-behavior-y:none;
+}
+body{ -webkit-user-select:none; user-select:none; }
+input,textarea{ -webkit-user-select:text; user-select:text; }
+
+.app{
+  display:flex; flex-direction:column;
+  height:100%; height:100dvh;
+  max-width:560px; margin:0 auto;
+  position:relative;
+  /* clip 而不是 hidden：弹层收起时停在 translateY(105%)（挂在容器下面），
+     这会给 .app 造出一段可滚动的溢出。hidden 允许被程序化滚动 ——
+     聚焦弹层里的输入框时浏览器会自作主张把 .app 往上滚，
+     整个界面（包括浮动的顶部栏）就被顶走了。clip 根本不建滚动容器，
+     滚不动。前一行 hidden 是给不认识 clip 的老 WebView 兜底。 */
+  overflow:hidden;
+  overflow:clip;
+}
+
+/* ================= 顶部：周历 =================
+   毛玻璃吸顶栏：脱离文档流浮在内容区上面，动作卡片从这块磨砂玻璃底下
+   滚过去。顶层 20 < 遮罩 40 < 弹层 50，所以弹层一开照样盖住它。
+   主内容区留出等高的上内边距（--topbar-h，由 JS 量），否则第一张卡片
+   会被压在栏底下。 */
+.topbar{
+  position:absolute; top:0; left:0; right:0;
+  padding:calc(var(--safe-t) + 10px) 14px 12px;
+  /* 纯色不透明：上滑时动作卡片滚到日期栏下面，会被这层纯色完全挡住，
+     不再透出「半透明」。用户 2026-10-05 明确要求「日期的底色永远是纯色」。
+     （之前是 rgba(243,246,252,.72)+blur(20px) 的毛玻璃，卡片一滚进去就糊成半透明。） */
+  background:#f3f6fc;
+  /* 35：**低于**遮罩（40）。弹层一开，这整块跟背景一起被遮罩（毛玻璃）虚化 ——
+     面板上方露出来的那条也跟着糊，全场统一。
+     仍高于主内容（无 z-index）—— 滚动时照样压着卡片、吸附在顶上；
+     弹层（50）照样滑上来盖住它。 */
+  z-index:35;
+}
+/* 面板开着时顶部栏不吃点击。现在它已经在遮罩底下，点击本来就会被遮罩接走，
+   这条留着只是保险（万一将来层级又调回去）。 */
+.app.sheet-open .topbar{ pointer-events:none; }
+.week-nav{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:10px; margin-bottom:11px;
+}
+.week-nav .range{
+  flex:1 1 auto; min-width:0; overflow:hidden;
+  font-size:17px; font-weight:800; letter-spacing:-.2px; white-space:nowrap;
+  color:var(--ink);
+}
+.week-nav .range small{
+  display:block; font-size:11.5px; font-weight:400; color:var(--faint);
+  letter-spacing:.3px; margin-top:1px; overflow:hidden; text-overflow:ellipsis;
+}
+.week-nav .range.clickable small{ color:var(--accent); }
+.week-nav .range.clickable:active{ opacity:.7; }
+.nav-btns{ display:flex; gap:4px; flex:0 0 auto; }
+.nav-btn{
+  width:40px; height:40px; border-radius:13px;
+  background:transparent; border:none;
+  color:var(--ink-2); font-size:22px; line-height:1;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; transition:.15s; flex:0 0 auto; padding:0;
+}
+.nav-btn:active{ background:var(--soft-blue); transform:scale(.94); }
+.nav-btn svg{ width:21px; height:21px; }
+/* 月份箭头是纯文字字形，比 svg 小一圈，单独放开一点 */
+#btnPrev,#btnNext{ font-size:24px; padding-bottom:2px; }
+
+.week-strip{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+.wd{
+  background:var(--card); border:1.5px solid transparent; border-radius:12px;
+  padding:7px 2px 6px; text-align:center; cursor:pointer;
+  transition:.15s; position:relative;
+  box-shadow:var(--shadow);
+}
+.wd .d{ font-size:10.5px; color:var(--faint); display:block; }
+.wd .n{ font-size:15px; font-weight:700; display:block; margin-top:2px; color:var(--ink-2); }
+.wd .dot{
+  display:block; width:4px; height:4px; border-radius:50%;
+  margin:3px auto 0; background:transparent;
+}
+.wd.train{ background:var(--soft-blue); border-color:var(--line-blue); }
+.wd.train .n{ color:var(--ink); }
+.wd.train .dot{ background:var(--accent); }
+.wd.active{ background:var(--accent); border-color:var(--accent); }
+.wd.active .d,.wd.active .n{ color:#fff; }
+.wd.active .dot{ background:#fff; }
+.wd.active{ box-shadow:0 6px 16px rgba(46,111,237,.28); }
+.wd:active{ transform:scale(.95); }
+
+/* ================= 中间：内容区 ================= */
+.content{
+  flex:1 1 auto; overflow-y:auto; -webkit-overflow-scrolling:touch;
+  /* 顶部栏是浮动的，上方留出它的高度 */
+  padding:calc(var(--topbar-h, 140px) + 14px) 14px 20px;
+}
+
+.day-head{
+  display:flex; align-items:center; gap:8px;
+  margin-bottom:13px; padding:0 2px;
+}
+.day-head .t{ font-size:19px; font-weight:800; letter-spacing:-.3px; color:var(--ink); flex:0 0 auto; }
+.day-head .t em{ font-style:normal; color:var(--accent); }
+.day-head .s{
+  font-size:12.5px; color:var(--muted); font-weight:500;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  min-width:0; flex:0 1 auto;
+}
+.dh-right{ display:flex; align-items:center; gap:9px; flex:0 0 auto; margin-left:auto; }
+.chip-btn{
+  background:var(--soft-blue); border:1px solid var(--line-blue); border-radius:999px;
+  color:var(--accent); font-size:12.5px; padding:5px 11px; cursor:pointer;
+  display:flex; align-items:center; gap:4px; transition:.15s; font-weight:700;
+}
+.chip-btn:active{ background:#e2ebff; transform:scale(.95); }
+
+/* ---- 改动范围开关 ----
+   摆在当天标题右边，和「换」同一排、同一套胶囊皮。
+   灭（默认）→ 改动固化进周模板，以后每个同一天都这样；
+   亮（主题色）→ 只改这一天，模板一个字都不动。 */
+.scope-btn{
+  display:none;                       /* 休息日 / 当天没动作时由 renderScope() 打开 */
+  align-items:center; gap:4px; flex:0 0 auto;
+  background:var(--soft-blue); border:1px solid var(--line-blue); border-radius:999px;
+  color:var(--accent); font-size:12.5px; font-weight:700;
+  font-family:inherit; padding:5px 11px; cursor:pointer; transition:.15s;
+}
+.scope-btn svg{ width:13px; height:13px; flex:0 0 auto; }
+.scope-btn:active{ transform:scale(.95); }
+.scope-btn.on{
+  background:var(--accent); border-color:var(--accent); color:#fff;
+  box-shadow:0 4px 12px rgba(46,111,237,.26);
+}
+.scope-btn.on:active{ background:var(--accent-d); }
+
+/* ---- 动作卡片 ---- */
+.ex-card{
+  background:var(--card); border:none;
+  border-radius:var(--r-lg); padding:13px 14px; margin-bottom:11px;
+  position:relative; box-shadow:var(--shadow);
+}
+.ex-head{ display:flex; align-items:center; gap:11px; }
+.ex-ico{
+  width:40px; height:40px; border-radius:12px; flex:0 0 auto;
+  background:var(--soft-blue); display:flex; align-items:center; justify-content:center;
+  color:var(--accent);
+}
+.ex-ico svg{ width:22px; height:22px; }
+.ex-meta{ flex:1 1 auto; min-width:0; }
+.ex-name{ font-size:16px; font-weight:800; letter-spacing:-.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--ink); }
+.ex-sub{ font-size:11.5px; color:var(--muted); margin-top:1px; }
+.ex-del{
+  width:30px; height:30px; border-radius:9px; flex:0 0 auto;
+  background:transparent; border:1px solid var(--line); color:var(--faint);
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.ex-del:active{ background:#fdecec; color:var(--danger); border-color:#f6c9ca; }
+.ex-del svg{ width:15px; height:15px; }
+
+/* ---- 上次参数条 ---- */
+.last-row{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  background:var(--tint-blue); border:none;
+  border-radius:var(--r-md); padding:7px 8px 7px 12px; margin:11px 0 10px;
+}
+.last-row.none{ background:var(--soft); min-height:0; }
+.last-txt{ font-size:12.5px; color:var(--ink-2); font-weight:500; letter-spacing:.1px; }
+.last-row.none .last-txt{ color:var(--faint); }
+.last-txt b{ font-size:14px; font-weight:800; color:var(--accent); }
+/* 「沿用」：默认吃主题色（够显眼，像一颗能点的按钮）；
+   点过之后变回原来的淡蓝 —— 数据已经带过来了，这颗按钮退成次要状态。 */
+.use-btn{
+  background:var(--accent); color:#fff; border:none; border-radius:999px;
+  font-size:12.5px; font-weight:800; padding:6px 15px; cursor:pointer;
+  flex:0 0 auto; transition:.15s;
+}
+.use-btn.used{ background:var(--accent-s); }
+.use-btn:active{ background:var(--accent-d); transform:scale(.95); }
+
+/* ---- 输入区 ---- */
+/* 三栏宽度：这版把重量让窄、把「每组次数」放宽（用户 2026-10-04 报「20/20/20/20 盛不下」）。
+   重量栏除了输入框还要塞「−」「+」两个 22px 按钮，所以它仍是第一宽；
+   但它只需要装下小数（27.5 / 112.5）—— 412px 屏上 55px 就够（含光标），
+   原先给了 78px 是浪费，多出来的正好补给次数栏。
+   组数只放一两位数字，压到最窄即可。
+   412px 屏实测：重量输入框约 55px、「每组次数」约 139px、「组数」约 36px。
+   ⚠️ 三个 fr 之和保持 3.3（1.2 + 0.55 + 1.55），别改成一个总数不同的配比。 */
+.inputs{ display:grid; grid-template-columns:1.2fr .55fr 1.55fr; gap:8px; }
+.fld{ background:var(--soft); border:1.5px solid var(--line); border-radius:var(--r-md); padding:6px 9px 7px; }
+.fld.focus{ border-color:var(--accent); background:#fff; }
+.fld .lb{ font-size:10.5px; color:var(--faint); display:block; letter-spacing:.2px; margin-bottom:1px; }
+.fld .row{ display:flex; align-items:center; gap:2px; }
+.fld .step{
+  width:22px; height:24px; flex:0 0 auto; border:none; background:transparent;
+  color:var(--accent); font-size:16px; font-weight:700; line-height:1;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  border-radius:6px;
+}
+.fld .step:active{ background:rgba(46,111,237,.12); }
+.fld input{
+  width:100%; min-width:0; background:transparent; border:none; outline:none;
+  color:var(--ink); font-size:16px; font-weight:800; padding:1px 0;
+  font-family:inherit; text-align:center; caret-color:var(--accent);
+}
+.fld input::placeholder{ color:var(--faint); font-weight:400; font-size:14px; }
+.fld.wide input{ text-align:left; font-size:15px; }
+
+/* ---- 备注栏（卡片最下面那行自由文本） ----
+   跟参数栏同一套浅灰底 + 圆角，但故意做得「轻」一点：字号小、字重常规、
+   高度就一行 —— 它是个可选补充，不该跟上面三个参数抢注意力。
+   高度由 JS 的 autoGrowNote() 跟着内容写（所以这里给 resize:none + overflow:hidden）。 */
+.note-row{ margin-top:8px; }
+.note-inp{
+  display:block; width:100%; box-sizing:border-box;
+  background:var(--soft); border:1.5px solid var(--line);
+  border-radius:var(--r-md); padding:7px 10px;
+  font-family:inherit; font-size:13px; line-height:1.5; font-weight:500;
+  color:var(--ink); caret-color:var(--accent);
+  resize:none; overflow:hidden; outline:none;
+}
+.note-inp:focus{ border-color:var(--accent); background:#fff; }
+.note-inp::placeholder{ color:var(--faint); font-weight:400; }
+
+/* ---- 空状态 ---- */
+.empty{
+  text-align:center; padding:52px 24px; color:var(--muted);
+}
+.empty svg{ width:44px; height:44px; opacity:.35; margin-bottom:12px; }
+.empty p{ margin:0 0 4px; font-size:14px; }
+.empty small{ font-size:12.5px; color:var(--faint); }
+
+/* ---- 添加动作（列表末尾的虚线条） ---- */
+.add-card{
+  border:1.6px dashed var(--line-blue); border-radius:var(--r-lg);
+  background:var(--card); color:var(--accent);
+  text-align:center; padding:15px; font-size:14.5px; font-weight:700;
+  cursor:pointer; transition:.15s; margin-bottom:4px;
+}
+.add-card:active{ background:var(--soft-blue); transform:scale(.99); }
+
+/* ---- 休息日 ---- */
+.rest-card{
+  background:var(--card); border:1.6px dashed var(--line-blue); border-radius:var(--r-lg);
+  padding:36px 22px; text-align:center; box-shadow:var(--shadow);
+}
+.rest-card .big{ font-size:17px; font-weight:800; margin-bottom:5px; color:var(--ink); }
+.rest-card .sub{ font-size:13px; color:var(--muted); margin-bottom:18px; }
+.rest-card .ghost{
+  display:inline-block; background:var(--soft-blue); border:1px solid var(--line-blue);
+  color:var(--accent); border-radius:11px; padding:10px 18px; font-size:13.5px;
+  font-weight:700; cursor:pointer;
+}
+.rest-card .ghost:active{ transform:scale(.96); background:#e2ebff; }
+
+/* ================= 底部操作栏 ================= */
+.bottom-bar{
+  flex:0 0 auto;
+  padding:11px 14px calc(var(--safe-b) + 11px);
+  background:var(--bg);
+  z-index:20;
+}
+.btn-save{
+  width:100%; height:54px; border:none; border-radius:15px;
+  background:var(--accent); color:#fff;
+  font-size:16.5px; font-weight:800; letter-spacing:.5px; cursor:pointer;
+  font-family:inherit; transition:.15s;
+  box-shadow:var(--shadow-blue);
+}
+.btn-save:active{ background:var(--accent-d); transform:scale(.985); box-shadow:0 3px 10px rgba(46,111,237,.22); }
+.btn-save.done{ background:var(--green); box-shadow:0 6px 18px rgba(22,163,74,.28); }
+
+/* ================= 底部弹层 ================= */
+/* 遮罩只用毛玻璃，不压黑。
+   压黑 = 背景亮度降低，用户明确不要（「点开设置的过渡动画背景不要亮度降低。
+   类似的所有都不要亮度降低」）。模糊自己就能把背景推远、把面板托起来，
+   不需要再叠一层黑 —— 这也是全站唯一一种「弹层出场」的观感。 */
+.mask{
+  position:absolute; inset:0;
+  background:rgba(246,248,253,.10);
+  -webkit-backdrop-filter:blur(14px) saturate(130%);
+  backdrop-filter:blur(14px) saturate(130%);
+  opacity:0; pointer-events:none; transition:opacity .22s; z-index:40;
+}
+.mask.show{ opacity:1; pointer-events:auto; }
+
+.sheet{
+  position:absolute; left:0; right:0; bottom:0; z-index:50;
+  /* 面板本体保持纯白不透明：
+     半透明 + 模糊会让下面的周历透上来，跟面板内容糊在一起。 */
+  background:var(--card);
+  border-radius:22px 22px 0 0;
+  max-height:86%; display:flex; flex-direction:column;
+  transform:translateY(105%); transition:transform .26s cubic-bezier(.32,.72,.36,1);
+  padding-bottom:var(--safe-b);
+  box-shadow:0 -8px 34px rgba(35,40,56,.16);
+  /* 滚动交给面板本身（不再由 .sheet-body 滚），吸顶栏才黏得住 */
+  overflow-y:auto; -webkit-overflow-scrolling:touch;
+}
+.sheet.show{ transform:translateY(0); }
+
+/* 设置是独立一整页：铺满全屏，上面不留那截空白（用户要的「单独成一个页面，不留白」）。
+   抓手一并去掉 —— 一整页没有「往下拖收回去」这回事。
+   标题得自己让开状态栏 / 挖孔：以前面板在底下，头顶永远是屏幕中间。 */
+.sheet.full{ height:100%; max-height:100%; border-radius:0; box-shadow:none; }
+.sheet.full .sheet-top{ border-radius:0; }
+.sheet.full .sheet-head{ padding-top:calc(var(--safe-t) + 14px); }
+.sheet.full .sheet-grip{ display:none; }
+
+/* ---- 吸顶栏：抓手 + 标题 + ✕ ----
+   面板滚动时它钉在上沿，下面的列表从这块磨砂玻璃底下滑过去。 */
+.sheet-top{
+  position:sticky; top:0; z-index:3; flex:0 0 auto;
+  background:rgba(255,255,255,.7);
+  -webkit-backdrop-filter:blur(18px) saturate(180%);
+  backdrop-filter:blur(18px) saturate(180%);
+  border-radius:22px 22px 0 0;
+  box-shadow:0 1px 0 rgba(35,40,56,.055);
+}
+
+/* ---- 二级弹层：叠在主弹层之上 ----
+   主弹层加 .behind 只是为了标记「下面那层还开着」，
+   但**不再缩小**：用户明确不要背景有缩放动画（「点击设置里面的功能按钮
+   弹窗出现时，背景不要有缩小动画」）。
+   二级遮罩走毛玻璃而不是压黑：二级面板通常只占屏幕下半截，空着的那一块
+   透出底下主弹层被虚化的样子 —— 既看得出「下面那层还没关」，也还认得出
+   刚才停在哪一行。压黑就把上下文全糊死了。
+
+   底色只用一点点白（.12）：再糊一层厚的白，文字全被冲平，只剩一片白茫茫
+   —— 玻璃要能透出东西才叫玻璃。
+   模糊也别开太大，10px 刚好把字糊成影，再大就只剩色块了。 */
+.sheet.show.behind{ transform:translateY(0); }
+.sheet.sheet-sub{ z-index:60; max-height:80%; }
+.mask.mask-sub{
+  z-index:55;
+  background:rgba(246,248,253,.12);
+  -webkit-backdrop-filter:blur(7px) saturate(130%);
+  backdrop-filter:blur(7px) saturate(130%);
+}
+/* 二级开着的时候，主遮罩自己不再糊 —— 模糊交给二级那块玻璃单独负责。
+   backdrop-filter 糊的是「它背后的所有东西」，二级遮罩盖满全屏，本来就会把
+   主遮罩底下的设置糊一遍；主遮罩再糊一道就是 6+10 ≈ 16px，行与行直接糊成色块，
+   认不出刚停在哪一行（v2.7 第一版就是这么翻的车，出图才看出来）。
+   选择器用 #mask 而不是 .mask —— 二级遮罩自己也带 .mask 类，
+   `.app.sub-open .mask` 是 3 个类，优先级高过 `.mask.mask-sub` 的 2 个类，
+   会把二级那块毛玻璃一起改掉（自检抓过这个坑）。 */
+.app.sub-open #mask{
+  -webkit-backdrop-filter:none; backdrop-filter:none;
+  background:rgba(246,248,253,.04);
+}
+.sheet-grip{ width:38px; height:4px; border-radius:2px; background:var(--line-2); margin:9px auto 4px; flex:0 0 auto; }
+.sheet-head{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:8px 18px 12px; flex:0 0 auto;
+}
+.sheet-head .st{ font-size:16.5px; font-weight:800; color:var(--ink); }
+.sheet-close{
+  width:32px; height:32px; border-radius:10px; background:var(--soft);
+  border:1px solid var(--line); color:var(--ink-2); font-size:17px;
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.sheet-close:active{ background:var(--soft-blue); }
+.sheet-body{ padding:0 18px 18px; flex:0 0 auto; }
+
+/* 搜索框 */
+.search{
+  display:flex; align-items:center; gap:9px;
+  background:var(--soft); border:1px solid var(--line); border-radius:var(--r-md);
+  padding:10px 13px; margin-bottom:12px;
+}
+.search svg{ width:17px; height:17px; color:var(--faint); flex:0 0 auto; }
+.search input{
+  flex:1 1 auto; background:transparent; border:none; outline:none;
+  color:var(--ink); font-size:15px; font-family:inherit; caret-color:var(--accent);
+}
+.search input::placeholder{ color:var(--faint); }
+
+/* 筛选条 */
+.filters{ display:flex; gap:7px; overflow-x:auto; padding-bottom:11px; margin-bottom:3px; }
+.filters::-webkit-scrollbar{ display:none; }
+.fchip{
+  flex:0 0 auto; display:inline-flex; align-items:center; gap:5px;
+  background:var(--card); border:1px solid var(--line-2);
+  color:var(--ink-2); border-radius:999px; padding:6px 13px; font-size:13px;
+  cursor:pointer; font-weight:600; transition:.15s; white-space:nowrap;
+}
+.fchip .fc-ico{ display:flex; align-items:center; justify-content:center; width:15px; height:15px; flex:0 0 auto; }
+.fchip .fc-ico svg{ width:15px; height:15px; stroke-width:2.1; }
+.fchip.on{ background:var(--accent); border-color:var(--accent); color:#fff; }
+.fchip:active{ transform:scale(.95); }
+
+/* 选动作列表 */
+.pick-item{
+  display:flex; align-items:center; gap:12px; padding:11px 12px;
+  border-radius:var(--r-md); cursor:pointer; transition:.12s;
+  border:1px solid transparent;
+}
+.pick-item:active{ background:var(--soft); }
+.pick-item.on{ background:var(--soft-blue); border-color:var(--line-blue); }
+.pick-ico{
+  width:36px; height:36px; border-radius:11px; background:var(--soft);
+  display:flex; align-items:center; justify-content:center;
+  color:var(--muted); flex:0 0 auto;
+}
+.pick-item.on .pick-ico{ color:var(--accent); background:#fff; }
+.pick-ico svg{ width:20px; height:20px; }
+.pick-txt{ flex:1 1 auto; min-width:0; }
+.pick-name{ font-size:14.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--ink); }
+.pick-sub{ font-size:11.5px; color:var(--muted); margin-top:1px; }
+.pick-flag{
+  font-size:11px; font-weight:700; color:var(--accent);
+  border:1px solid rgba(46,111,237,.32); border-radius:7px; padding:3px 8px; flex:0 0 auto;
+}
+.pick-flag.added{ color:var(--faint); border-color:var(--line-2); }
+
+/* ================= 设置面板 =================
+   和主页同一套皮：圆角白卡 + 浅蓝图标方块 + 右侧值/箭头。
+   以前是裸的下划线列表（.opt-item），像系统设置，跟 App 不是一路。 */
+.set-group{ margin-bottom:22px; }
+.set-title{
+  font-size:11.5px; font-weight:800; color:var(--faint);
+  letter-spacing:1.2px; margin:0 0 8px 4px; text-transform:uppercase;
+}
+.set-note{ font-size:12px; color:var(--muted); padding:8px 4px 0; line-height:1.6; }
+/* 设置页最末尾的署名行。用独立的 .set-sign —— 别复用 .set-note（那是「说明小字」，
+   用户明确要求设置页里没有；署名是另一回事，自检分开守着）。 */
+.set-sign{
+  text-align:center; color:var(--faint); font-size:11.5px;
+  letter-spacing:.2px; padding:26px 0 8px;
+}
+.set-sign .sign-sep{ display:inline-block; width:18px; }
+
+.set-card{
+  background:var(--card); border-radius:var(--r-lg);
+  box-shadow:var(--shadow); overflow:hidden;
+}
+.set-row{
+  display:flex; align-items:center; gap:11px;
+  padding:12px 14px; cursor:pointer; transition:.15s;
+  border-top:1px solid var(--line);
+}
+.set-row:first-child{ border-top:none; }
+.set-row:active{ background:var(--soft); }
+.set-row.static{ cursor:default; }
+.set-row.static:active{ background:transparent; }
+.set-ico{
+  width:40px; height:40px; border-radius:12px; flex:0 0 auto;
+  background:var(--soft-blue); color:var(--accent);
+  display:flex; align-items:center; justify-content:center;
+}
+.set-ico svg{ width:21px; height:21px; }
+.set-ico.mute{ background:var(--soft); color:var(--faint); }
+.set-ico.danger{ background:#fdecec; color:var(--danger); }
+.set-txt{ flex:1 1 auto; min-width:0; }
+.set-name{
+  font-size:15px; font-weight:800; letter-spacing:-.2px; color:var(--ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.set-name.danger{ color:var(--danger); }
+.set-sub{ font-size:11.5px; color:var(--muted); margin-top:1px; line-height:1.45; }
+.set-val{
+  font-size:13px; font-weight:700; color:var(--muted);
+  display:flex; align-items:center; gap:5px; flex:0 0 auto; white-space:nowrap;
+}
+.set-row.on .set-val{ color:var(--accent); }
+.set-chev{ width:16px; height:16px; color:var(--faint); flex:0 0 auto; margin-left:-2px; }
+.set-row.on .set-chev{ color:var(--accent); }
+
+/* 部位选择网格 */
+.part-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:12px; }
+.part-cell{
+  background:var(--card); border:1.5px solid var(--line-2); border-radius:var(--r-md);
+  padding:15px 4px; text-align:center; font-size:14.5px; font-weight:800;
+  color:var(--ink-2); cursor:pointer; transition:.15s; box-shadow:var(--shadow);
+}
+.part-cell.on{
+  background:var(--accent); border-color:var(--accent); color:#fff;
+  box-shadow:0 6px 16px rgba(46,111,237,.26);
+}
+.part-cell.none{ color:var(--muted); font-weight:600; font-size:13px; }
+.part-cell:active{ transform:scale(.95); }
+
+/* 备份文本框 */
+.io-box{
+  width:100%; background:var(--soft); border:1px solid var(--line);
+  border-radius:var(--r-md); color:var(--ink-2); font-size:11px; padding:12px;
+  font-family:ui-monospace,Menlo,Consolas,monospace; resize:none; outline:none;
+  line-height:1.5;
+}
+.io-box:focus{ border-color:var(--accent); }
+.ghost-btn{
+  flex:0 0 auto; padding:13px 20px;
+  background:var(--soft); border:1px solid var(--line-2); border-radius:15px;
+  color:var(--ink-2); font-weight:800; font-size:14px; font-family:inherit;
+  cursor:pointer; transition:.15s;
+}
+.ghost-btn:active{ background:var(--soft-blue); border-color:var(--line-blue); }
+
+/* ================= 应用内对话框 =================
+   用来替代 window.prompt / window.confirm —— 那两个走的是安卓系统原生弹窗，
+   方角 + 系统配色，和 App 的圆角浅蓝风格不是一套。这里是自绘的圆角卡片。
+
+   遮罩也走毛玻璃：弹窗四周空出来的那块，透出底下的页面被虚化的样子。
+   底色是淡白（.10）而不是深色压黑 —— 压黑会让背景整体变暗，
+   用户明确不要（「背景不要亮度降低」）。
+   ⚠️ 这里历史上是不敢开模糊的：v1.4 用户明确报过「新建动作时输入法弹起来卡一下」，
+   当时 `.dlg-wrap` 上挂着 `blur(2px)`，键盘 resize 的每一帧都要离屏重算。
+   v2.7 用户要求「全程毛玻璃」，于是把 `.app.kb` / `.app.vv` 那两套「键盘动画
+   期间临时摘掉模糊」的机制整个删了 —— 代价是键盘弹起那两百毫秒可能掉帧，
+   真机上如果卡，回退方案记在 REFERENCE.md。 */
+.dlg-wrap{
+  position:absolute; inset:0; z-index:70;
+  display:flex; align-items:center; justify-content:center;
+  padding:22px 20px;
+  background:rgba(246,248,253,.10);
+  -webkit-backdrop-filter:blur(14px) saturate(130%);
+  backdrop-filter:blur(14px) saturate(130%);
+  opacity:0; pointer-events:none;
+  transition:opacity .2s;
+}
+.dlg-wrap.show{ opacity:1; pointer-events:auto; will-change:opacity; }
+.dlg{
+  width:100%; max-width:340px;
+  background:var(--card); border-radius:22px;
+  padding:22px 20px 18px;
+  box-shadow:0 18px 52px rgba(35,40,56,.28);
+  max-height:100%; overflow-y:auto;
+  transform:scale(.94) translateY(6px) translateZ(0);
+  transition:transform .18s cubic-bezier(.32,.72,.36,1);
+  will-change:transform;
+}
+.dlg-wrap.show .dlg{ transform:scale(1) translateY(0) translateZ(0); }
+
+.dlg-title{ font-size:17px; font-weight:800; color:var(--ink); letter-spacing:-.2px; text-align:center; }
+.dlg-desc{ font-size:13px; color:var(--muted); line-height:1.65; text-align:center; margin-top:9px; }
+
+.dlg-label{
+  font-size:11.5px; font-weight:800; color:var(--faint);
+  letter-spacing:1.1px; text-transform:uppercase;
+  margin:18px 0 8px 3px;
+}
+.dlg-input{
+  width:100%; background:var(--soft); border:1px solid var(--line);
+  border-radius:var(--r-md); padding:13px 14px;
+  font-size:15px; color:var(--ink); font-family:inherit;
+  outline:none; transition:.15s; caret-color:var(--accent);
+}
+.dlg-input::placeholder{ color:var(--faint); }
+.dlg-input:focus{ border-color:var(--accent); background:#fff; box-shadow:0 0 0 3px rgba(46,111,237,.13); }
+
+/* 对话框里的单选胶囊（不复用 .fchip，避免和它的选中态抢优先级） */
+.dlg-chips{ display:flex; flex-wrap:wrap; gap:8px; }
+.dchip{
+  display:inline-flex; align-items:center; gap:6px;
+  background:var(--soft); border:1px solid var(--line-2);
+  color:var(--ink-2); border-radius:999px; padding:8px 14px;
+  font-size:13.5px; font-weight:600; cursor:pointer;
+  transition:.15s; white-space:nowrap;
+}
+.dchip:active{ transform:scale(.95); }
+.dchip.on{ background:var(--accent); border-color:var(--accent); color:#fff; }
+.dchip .dc-ico{ display:flex; align-items:center; justify-content:center; width:15px; height:15px; flex:0 0 auto; }
+.dchip .dc-ico svg{ width:15px; height:15px; stroke-width:2.1; }
+
+.dlg-foot{ display:flex; gap:10px; margin-top:24px; }
+.dlg-btn{
+  flex:1 1 0; height:48px; border:none; border-radius:15px;
+  font-size:15px; font-weight:800; font-family:inherit;
+  cursor:pointer; transition:.15s;
+}
+.dlg-btn.ghost{
+  flex:0 0 auto; padding:0 22px;
+  background:var(--soft); border:1px solid var(--line-2); color:var(--ink-2);
+}
+.dlg-btn.ghost:active{ background:var(--soft-blue); border-color:var(--line-blue); }
+.dlg-btn.primary{ background:var(--accent); color:#fff; box-shadow:var(--shadow-blue); }
+.dlg-btn.primary:active{ background:var(--accent-d); transform:scale(.985); }
+.dlg-btn.primary:disabled{ background:#c6d5f4; box-shadow:none; }
+.dlg-btn.danger{ background:var(--danger); color:#fff; box-shadow:0 6px 18px rgba(229,72,77,.26); }
+.dlg-btn.danger:active{ background:#cf3439; transform:scale(.985); }
+
+/* ---- 月历弹窗 ---- */
+.cal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.cal-title{ font-size:15.5px; font-weight:800; color:var(--ink); letter-spacing:-.2px; }
+.cal-nav{
+  width:30px; height:30px; border-radius:10px; border:none; padding:0;
+  background:var(--soft-blue); color:var(--accent);
+  font-size:17px; line-height:1; cursor:pointer; transition:.15s;
+  display:flex; align-items:center; justify-content:center;
+}
+.cal-nav:active{ background:#dbe6ff; transform:scale(.92); }
+
+.cal-wd{ display:grid; grid-template-columns:repeat(7,1fr); margin-bottom:5px; }
+.cal-wd span{ text-align:center; font-size:11px; font-weight:600; color:var(--faint); }
+
+.cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+.cal-cell{
+  position:relative; height:38px; border-radius:11px; cursor:pointer;
+  border:1.5px solid transparent; transition:.15s;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+}
+.cal-cell .n{ font-size:14.5px; font-weight:700; color:var(--ink-2); line-height:1; }
+.cal-cell.out .n{ color:#c3cbd8; font-weight:600; }
+.cal-cell.done{ background:var(--soft-blue); }
+.cal-cell.done .n{ color:var(--accent); }
+.cal-cell.today{ border-color:var(--line-blue); }
+.cal-cell.sel{ background:var(--accent); border-color:var(--accent); box-shadow:0 5px 14px rgba(46,111,237,.28); }
+.cal-cell.sel .n{ color:#fff; }
+.cal-cell.sel .mk{ background:#fff; }
+/* 训练日的小圆点 */
+.cal-cell .mk{
+  position:absolute; left:50%; bottom:5px; margin-left:-2px;
+  width:4px; height:4px; border-radius:50%; background:var(--accent);
+}
+.cal-cell.out .mk{ background:#cfd8e6; }
+.cal-cell:active{ transform:scale(.94); }
+
+.cal-legend{
+  display:flex; justify-content:center; gap:16px;
+  margin-top:12px; font-size:11px; color:var(--faint);
+}
+.cal-legend span{ display:flex; align-items:center; gap:5px; }
+.cal-legend i{ width:8px; height:8px; flex:0 0 auto; }
+.cal-legend .lg-train{ background:var(--accent); border-radius:50%; }
+.cal-legend .lg-done{ background:var(--soft-blue); border:1px solid var(--line-blue); border-radius:2.5px; }
+
+/* Toast —— 也走毛玻璃：底下通常是刚存完的那张动作卡片，透出来很好看 */
+.toast{
+  position:absolute; left:50%; bottom:calc(var(--safe-b) + 92px);
+  transform:translateX(-50%) translateY(14px);
+  background:rgba(35,40,56,.62);
+  -webkit-backdrop-filter:blur(18px) saturate(180%);
+  backdrop-filter:blur(18px) saturate(180%);
+  color:#fff; font-size:13.5px; font-weight:700;
+  padding:11px 20px; border-radius:999px; z-index:80;
+  opacity:0; pointer-events:none; transition:.24s;
+  box-shadow:0 8px 28px rgba(35,40,56,.28); white-space:nowrap; max-width:86%;
+  overflow:hidden; text-overflow:ellipsis;
+}
+.toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+.toast.ok{ background:rgba(22,163,74,.78); }
+.toast.err{ background:rgba(229,72,77,.8); }
+
+/* ================= 毛玻璃一律常开，不做任何「退化」=================
+   2026-10-04（v2.7）用户明确要求「全程毛玻璃」：输入法弹起的那段过渡里
+   也不许把模糊摘掉。于是两套退化机制整个删除：
+     · `.app.kb`（键盘态）：原来会摘掉全站模糊，还会把主内容
+       `content-visibility:hidden` —— 主内容一旦不渲染，毛玻璃背后就是一片空白，
+       「透出底下页面」这件事本身也就没了；
+     · `.app.vv`（视口正在变）：原来只摘弹窗遮罩那一条模糊。
+   历史背景：v1.4 用户报过「新建动作时输入法弹起来卡一下」，这两套是当时加的性能
+   保护。现在改成视觉优先 —— 键盘弹起那两百毫秒可能掉帧，真机若卡，回退方案
+   记在 REFERENCE.md（按 visualViewport.resize 临时挂 .vv 摘掉模糊）。
+
+   ⚠️ 别再把 `.app.kb` / `.app.vv` 的样式加回来：自检里有一条会真的把焦点放进
+   输入框，再量弹窗遮罩的毛玻璃有没有被摘掉，加回来就会 FAIL。 */
+
+/* ================= 长按拖动，调整当天动作顺序 ================= */
+.ex-tools{ display:flex; align-items:center; gap:6px; flex:0 0 auto; }
+.ex-drag{
+  width:30px; height:30px; border-radius:9px; flex:0 0 auto;
+  background:transparent; border:1px solid var(--line); color:var(--faint);
+  display:flex; align-items:center; justify-content:center;
+  /* pan-y：允许从手柄处起手的垂直滚动（长按成功后才由 touchmove preventDefault 锁住）。
+     设成 none 会把「从手柄处滑动页面」也一起吃掉 —— 用户报过「从手柄处滑动划不动」。 */
+  cursor:grab; padding:0; touch-action:pan-y;
+}
+.ex-drag:active{ background:var(--soft-blue); color:var(--accent); border-color:var(--line-blue); }
+.ex-drag svg{ width:15px; height:15px; }
+
+/* 拖动过程中容器不再跟手滚屏；卡片位置一律只改 transform，不碰 DOM */
+.content.dragging{ touch-action:none; }
+.content.dragging .ex-card{ transition:transform .18s cubic-bezier(.32,.72,.36,1); }
+.ex-card.dragging{
+  /* 38：**高于**顶部栏那条日期栏（35）—— 拖动时卡片往上拖进日期栏底下，
+     得整张清清楚楚浮在纯色日期栏之上（否则会被栏挡住、看不到拖到哪了）。
+     仍低于遮罩（40），弹层不会被拖动的卡片穿透。 */
+  z-index:38; transition:none !important;
+  box-shadow:0 18px 42px rgba(35,40,56,.22), 0 0 0 1.5px rgba(46,111,237,.45);
+}
+.ex-card.dragging .ex-ico{ background:#fff; }
+/* 只有一个动作，没什么可换的 */
+#contentInner.single .ex-drag{ display:none; }
+
+/* 滚动条 */
+.content::-webkit-scrollbar,.sheet::-webkit-scrollbar{ width:0; }
+
+/* 小屏微调 */
+@media (max-height:680px){
+  .topbar{ padding-top:calc(var(--safe-t) + 6px); padding-bottom:9px; }
+  .week-nav{ margin-bottom:8px; }
+  .wd{ padding:5px 2px 4px; }
+  .content{ padding-top:calc(var(--topbar-h, 140px) + 11px); }
+}
